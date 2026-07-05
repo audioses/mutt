@@ -1,0 +1,19 @@
+name: Tone Changer
+description: "A mode to rewrite text in a different tone."
+
+ui:
+  - id: original_text
+    type: multiline
+    label: "Original Text"
+  - id: tone
+    type: dropdown
+    label: "Tone"
+    choices:
+      - "Formal"
+      - "Casual"
+      - "Professional"
+  - id: rewritten_text
+    type: multiline-readonly
+    label: "Rewritten Text"
+
+prompt: "Rewrite the following text in a {{tone}} tone: {{original_text}}"

@@ -1,0 +1,12 @@
+name: Simple Summarizer
+description: "A simple mode to summarize a block of text."
+
+ui:
+  - id: text_to_summarize
+    type: multiline
+    label: "Text to Summarize"
+  - id: summary
+    type: multiline-readonly
+    label: "Summary"
+
+prompt: "Summarize the following text: {{text_to_summarize}}"

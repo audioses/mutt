@@ -1,0 +1,15 @@
+# Optional dependencies for local / offline translation engines.
+# Install these only if you plan to use HuggingFace or Argos Translate.
+#
+#   pip install -r requirements-local.txt
+
+-r requirements.txt
+
+# HuggingFace local transformer models
+huggingface-hub
+transformers
+torch
+hf_xet
+
+# Argos Translate (offline, package-based)
+argostranslate

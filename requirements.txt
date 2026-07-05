@@ -1,0 +1,14 @@
+# Core dependencies for MUTT (LLM API translation + UI + file formats)
+wxPython
+polib
+requests
+openai
+google-generativeai
+tqdm
+PyYAML
+
+BeautifulSoup4
+keyring
+openpyxl
+python-docx
+python-pptx

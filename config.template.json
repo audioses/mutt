@@ -1,0 +1,40 @@
+{
+    "prompts": [],
+    "providers": {
+        "OpenAI GPT": {
+            "api_key": "",
+            "api_model": ""
+        },
+        "OpenRouter": {
+            "api_key": "",
+            "api_model": ""
+        },
+        "Google Gemini": {
+            "api_key": "",
+            "api_model": ""
+        },
+        "HuggingFace": {
+            "api_key": "",
+            "api_model": "",
+            "device": "cpu"
+        },
+        "Local Models": {
+            "api_key": "",
+            "api_model": ""
+        },
+        "Custom (OpenAI-Compatible)": {
+            "api_key": "",
+            "api_model": "",
+            "base_url": ""
+        }
+    },
+    "last_provider": "",
+    "batch_size": 50,
+    "temperature": 0.7,
+    "max_tokens": 4000,
+    "max_batch_tokens": 16000,
+    "enable_surrounding_context": true,
+    "context_previous_size": 8,
+    "context_next_size": 8,
+    "last_translation_method": "LLM Translation"
+}

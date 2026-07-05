@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+build/
+dist/
+*.spec.bak
+
+# Logs
+*.log
+logs/
+
+# Local data / models
+models/
+.local/
+argos_models/
+bin/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Claude / OMC runtime state
+.claude/
+.omc/
+.kilocode/
+.kilocodemodes
+graphify-out/
+CLAUDE.md
+
+# Debug / scratch
+ai_response_debug.log
+mutt_debug.log
+openai_responses.log
+omnitranslate_debug.log
+bugs.txt
+
+# Manual/debug scripts (not part of the pytest suite)
+scripts/
+
+# User secrets — see config.template.json for reference structure
+config.json
+translation_memory.json
+
+# Root-level scratch / diagnostic scripts
+diag_argos.py
+
+# Root-level doc duplicates (canonical copies live in docs/)
+/design.md
+/ever_learning_design.md
+/ever_learning_feature_summary.md
+/feedback_learning_implementation.md
+/format_handler_diagrams.md
+/ml_enhanced_feedback_learning.md
+/simple_ml_implementation.md
+/Documentation_Validation_Summary.md
+/Format_Handler_System_Documentation.md
+/HTML_Workflow_Validation_Plan.md
+/POWERHOUSE_TOOLS.md
