@@ -67,6 +67,7 @@ excludes = [
     "tkinter",
     "pytest", "pytest_mock",
     "matplotlib", "scipy", "pandas", "numpy.tests",
+    "simplejson",  # broken/stub copy gets bundled; requests falls back to stdlib json fine
 ]
 
 
