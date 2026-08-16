@@ -4,7 +4,11 @@ existing legacy dictionary format used in the MUTT application.
 """
 
 from typing import List, Dict, Any
-from .base.translation_unit import TranslationUnit, TranslationStatus
+from .base.translation_unit import TranslationUnit, TranslationStatus, Note
+
+# Keys the adapter owns explicitly; everything else on a legacy dict is
+# round-tripped through ``TranslationUnit.attributes``.
+_RESERVED_KEYS = ("msgid", "msgstr", "msgctxt", "fuzzy", "unit_id", "notes")
 
 class LegacyCompatibilityAdapter:
     """
@@ -57,9 +61,19 @@ class LegacyCompatibilityAdapter:
 
             # Store other potential polib-specific fields in attributes
             for key, value in legacy_entry.items():
-                if key not in ["msgid", "msgstr", "msgctxt", "fuzzy", "unit_id"]:
+                if key not in _RESERVED_KEYS:
                     unit.attributes[key] = value
-            
+
+            # Translator/extractor comments live in ``notes``, not attributes.
+            # Without this the round-trip silently deleted every comment in the
+            # file (see po_handler.save, which rebuilds tcomment/comment from
+            # unit.notes).
+            for note_data in legacy_entry.get("notes") or []:
+                try:
+                    unit.notes.append(Note.from_dict(note_data))
+                except Exception:  # noqa: BLE001 - skip malformed note, keep the rest
+                    continue
+
             units.append(unit)
         return units
 
@@ -76,9 +90,10 @@ class LegacyCompatibilityAdapter:
         legacy_entry["msgstr"] = translation_unit.target
         legacy_entry["msgctxt"] = translation_unit.context
         legacy_entry["fuzzy"] = translation_unit.fuzzy or translation_unit.status == TranslationStatus.NEEDS_WORK
-        
+
         # Update any other attributes stored on the unit
         legacy_entry.update(translation_unit.attributes)
+        legacy_entry["notes"] = [note.to_dict() for note in translation_unit.notes]
 
     @staticmethod
     def create_legacy_entry(translation_unit: TranslationUnit) -> Dict[str, Any]:
@@ -100,4 +115,8 @@ class LegacyCompatibilityAdapter:
         }
         # Preserve other format-specific fields
         legacy_entry.update(translation_unit.attributes)
+        # Comments must survive the trip to the UI and back — they are what
+        # tells a translator *why* a string reads the way it does, and dropping
+        # them here used to erase them from the saved file.
+        legacy_entry["notes"] = [note.to_dict() for note in translation_unit.notes]
         return legacy_entry

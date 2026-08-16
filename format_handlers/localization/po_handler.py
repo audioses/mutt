@@ -104,10 +104,14 @@ class POHandler(FormatHandler):
                 references = ", ".join([f"{path}:{line}" for path, line in entry.occurrences])
                 unit.add_note(f"Reference: {references}", note_type=NoteType.GENERAL, author="reference")
 
-            # Plural forms
+            # Plural forms. Keys are normalised to strings so the shape
+            # survives a JSON round-trip through project/autosave files
+            # (json turns int keys into strings anyway).
             if entry.msgid_plural:
                 unit.attributes['source_plural'] = entry.msgid_plural
-                unit.attributes['target_plurals'] = entry.msgstr_plural
+                unit.attributes['target_plurals'] = {
+                    str(k): v for k, v in (entry.msgstr_plural or {}).items()
+                }
 
             # Store original flags and other metadata
             unit.attributes['polib_flags'] = entry.flags
@@ -118,25 +122,44 @@ class POHandler(FormatHandler):
             
         return units
 
+    @staticmethod
+    def _read_original(source_path) -> "polib.POFile | None":
+        """Reopen the file we were loaded from, to copy its header/metadata.
+
+        Returns None when there is no usable source (new file, moved file,
+        unreadable) — the caller then falls back to minimal defaults.
+        """
+        if not source_path:
+            return None
+        try:
+            path = Path(source_path)
+            if not path.is_file():
+                return None
+            return polib.pofile(str(path))
+        except Exception:  # noqa: BLE001 - header preservation is best-effort
+            return None
+
     def save(self, units: List[TranslationUnit], file_path: Path, **options) -> None:
         """
         Save translation units to a .po or .pot file.
         """
         po_file = polib.POFile()
-        
-        # Preserve header from original file if possible, or create a default one
-        po_file.header = options.get('header', 'Default header for MUTT')
-        po_file.metadata = options.get('metadata', {
-            'Project-Id-Version': '1.0',
-            'Report-Msgid-Bugs-To': '',
-            'POT-Creation-Date': '',
-            'PO-Revision-Date': '',
-            'Last-Translator': '',
-            'Language-Team': '',
-            'MIME-Version': '1.0',
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Content-Transfer-Encoding': '8bit',
-        })
+
+        # Keep the original file's header and metadata verbatim. Project name,
+        # version, language, plural forms and team all live there; rewriting
+        # them with generic defaults renamed every project to "1.0" in Poedit
+        # and broke the Plural-Forms rule.
+        original = self._read_original(options.get('source_path'))
+        if original is not None:
+            po_file.header = original.header
+            po_file.metadata = dict(original.metadata)
+        else:
+            po_file.header = options.get('header', '')
+            po_file.metadata = options.get('metadata', {
+                'MIME-Version': '1.0',
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Content-Transfer-Encoding': '8bit',
+            })
 
         for unit in units:
             entry = polib.POEntry()
@@ -166,11 +189,14 @@ class POHandler(FormatHandler):
             if occurrences:
                 entry.occurrences = occurrences
 
-            # Restore plural forms
-            if 'source_plural' in unit.attributes:
+            # Restore plural forms. polib keys msgstr_plural by int; our
+            # in-memory/JSON shape uses strings.
+            if unit.attributes.get('source_plural'):
                 entry.msgid_plural = unit.attributes['source_plural']
-            if 'target_plurals' in unit.attributes:
-                entry.msgstr_plural = unit.attributes['target_plurals']
+                plurals = unit.attributes.get('target_plurals') or {}
+                entry.msgstr_plural = {
+                    int(k): v for k, v in plurals.items() if str(k).isdigit()
+                }
 
             # Restore flags
             if unit.fuzzy:

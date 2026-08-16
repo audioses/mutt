@@ -17,7 +17,17 @@ class _ExclusionLike(Protocol):
 
 def is_entry_untranslated(entry: dict) -> bool:
     """An entry counts as untranslated when its target is empty or identical
-    to the source (a common "not yet touched" sentinel in PO/XLIFF files)."""
+    to the source (a common "not yet touched" sentinel in PO/XLIFF files).
+
+    Plural entries carry their targets in ``target_plurals`` (msgstr[n]) and
+    leave ``msgstr`` empty, so they are judged on those forms instead: any
+    empty form means the entry still needs work, which is how gettext itself
+    counts them."""
+    if entry.get("source_plural"):
+        forms = entry.get("target_plurals") or {}
+        if not forms:
+            return True
+        return any(not (text or "").strip() for text in forms.values())
     msgstr = (entry.get("msgstr") or "").strip()
     if not msgstr:
         return True
