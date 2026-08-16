@@ -131,7 +131,7 @@ class APISetupDialog(wx.Dialog):
         
         # NEW: Contextual AI Prompts settings
         self.enable_context_checkbox = wx.CheckBox(self.advanced_tab, label="Enable Surrounding Context")
-        self.enable_context_checkbox.SetValue(self.config.get("enable_surrounding_context", False))
+        self.enable_context_checkbox.SetValue(self.config.get("enable_surrounding_context", True))
         sizer.Add(self.enable_context_checkbox, 0, wx.ALL, 5)
 
         sizer.Add(wx.StaticText(self.advanced_tab, label="Previous Context Size (entries):"), 0, wx.ALL, 5)

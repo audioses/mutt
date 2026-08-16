@@ -90,10 +90,11 @@ def _capture_process_batch(translator, monkeypatch):
     of the right length and captures the context window passed to it."""
     captured: list[dict] = []
 
-    def _fake(batch_texts, source, target, context, surrounding_context):
+    def _fake(batch_texts, source, target, context, surrounding_context, batch_entries=None):
         captured.append({
             "texts": list(batch_texts),
             "window": surrounding_context,
+            "entries": list(batch_entries or []),
         })
         return [""] * len(batch_texts), {"prompt_tokens": 0, "completion_tokens": 0}
 

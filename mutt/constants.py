@@ -13,6 +13,8 @@ ID_FOCUS_TARGET = wx.NewIdRef()
 ID_FOCUS_TOOL = wx.NewIdRef()
 ID_SEARCH = wx.NewIdRef()
 ID_JUMP = wx.NewIdRef()
+ID_FOCUS_NOTES = wx.NewIdRef()
+ID_FOCUS_PLURAL = wx.NewIdRef()
 
 
 # =============================================================================

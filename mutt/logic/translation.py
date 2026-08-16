@@ -45,7 +45,7 @@ def run_translation_thread(parent_frame, active_provider, settings, context):
                 used_positions.add(pos)
                 po_entries_positions.append(pos)
 
-        enable_ctx = parent_frame.config.get("enable_surrounding_context", False)
+        enable_ctx = parent_frame.config.get("enable_surrounding_context", True)
         prev_size = parent_frame.config.get("context_previous_size", 2) if enable_ctx else 0
         next_size = parent_frame.config.get("context_next_size", 2) if enable_ctx else 0
 

@@ -13,7 +13,7 @@ def _make_llm_translator(monkeypatch, batch_size=2):
     monkeypatch.setattr("ai_translator.time.sleep", lambda *_: None)
     calls = {"n": 0}
 
-    def fake_process(sub_msgids, src, tgt, context, window):
+    def fake_process(sub_msgids, src, tgt, context, window, batch_entries=None):
         calls["n"] += 1
         return [f"T:{m}" for m in sub_msgids], {"prompt_tokens": 1, "completion_tokens": 1}
 

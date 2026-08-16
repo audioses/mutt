@@ -42,6 +42,16 @@ def create_review_panel(frame):
         main_sizer.Add(nav_sizer, 0, wx.EXPAND|wx.ALL, 10)
         frame.logger.debug("Navigation controls created successfully")
 
+        # Plural form selector — only shown for entries that have a
+        # msgid_plural. The label must precede the control so screen readers
+        # announce it.
+        frame.plural_label = wx.StaticText(frame.panel, label="Plural form (Alt+U):")
+        frame.plural_choice = wx.Choice(frame.panel, choices=[])
+        main_sizer.Add(frame.plural_label, 0, wx.ALL, 5)
+        main_sizer.Add(frame.plural_choice, 0, wx.EXPAND|wx.ALL, 5)
+        frame.plural_label.Hide()
+        frame.plural_choice.Hide()
+
         # Source and target text sections
         frame.logger.debug("Creating text controls")
         main_sizer.Add(wx.StaticText(frame.panel, label="Source Text (Alt+Left):"), 0, wx.ALL, 5)
@@ -51,6 +61,12 @@ def create_review_panel(frame):
         frame.tgt_text_ctrl = wx.TextCtrl(frame.panel, style=wx.TE_MULTILINE)
         main_sizer.Add(frame.tgt_text_ctrl, 1, wx.EXPAND|wx.ALL, 5)
         frame.logger.debug("Text controls created successfully")
+
+        # Comments from the PO file (translator notes, extracted comments,
+        # source references). Read-only but focusable so it can be read.
+        main_sizer.Add(wx.StaticText(frame.panel, label="Comments && Notes (Alt+C):"), 0, wx.ALL, 5)
+        frame.notes_text_ctrl = wx.TextCtrl(frame.panel, style=wx.TE_MULTILINE|wx.TE_READONLY)
+        main_sizer.Add(frame.notes_text_ctrl, 1, wx.EXPAND|wx.ALL, 5)
 
         # Toolbox section
         frame.logger.debug("Creating toolbox section")
@@ -87,7 +103,7 @@ def create_review_panel(frame):
         # replaced could only be arrowed within one column, leaving most tools
         # unreachable from the keyboard. A single-column RadioBox would fix
         # that but adds a row per tool to an already tall panel; a Choice is
-        # one row and Up/Down walks every entry. (Attribute name kept â€” the
+        # one row and Up/Down walks every entry. (Attribute name kept — the
         # tool handlers read chat_mode_radio.GetStringSelection().)
         if not frame.tool_choices:
             frame.logger.warning("No tool choices available")
@@ -163,6 +179,7 @@ def create_review_panel(frame):
         frame.logger.debug("Binding events")
         frame.prev_btn.Bind(wx.EVT_BUTTON, frame.on_prev_entry)
         frame.next_btn.Bind(wx.EVT_BUTTON, frame.on_next_entry)
+        frame.plural_choice.Bind(wx.EVT_CHOICE, frame.on_plural_form_change)
         save_btn.Bind(wx.EVT_BUTTON, frame.on_save_changes)
         save_as_btn.Bind(wx.EVT_BUTTON, frame.on_save_as)
         save_project_btn.Bind(wx.EVT_BUTTON, frame.on_save_project)

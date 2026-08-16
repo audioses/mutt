@@ -41,6 +41,10 @@ from mutt.logic.translation import run_translation_thread
 from mutt.logic.tool_logic import run_tool_thread
 from mutt.logic.mode_loader import instantiate_mode
 from mutt.logic.entry_filter import is_entry_untranslated, select_entries_for_translation
+from mutt.logic.plurals import (
+    plural_forms, form_label, source_for_form, target_for_form, set_target_for_form,
+)
+from mutt.logic.notes import format_entry_notes
 from mutt.logic.file_operations import (
     on_open_file, on_open_project, on_load_ignore_list, on_save_changes,
     on_save_project, _save_project_file, _load_project_file,
@@ -77,6 +81,9 @@ class MainFrame(wx.Frame):
         self.current_entry_index = 0
         self.highest_reviewed_index = -1
         self.search_dialog = None
+        # Which plural form the review panel is currently editing (None for
+        # entries without a msgid_plural).
+        self.current_plural_form = None
         self.file_ignore_rules = [] # NEW: for file-based ignore rules
         self.translation_memory = TranslationMemory() # NEW: Initialize TranslationMemory
         self.source_language = "en" # Initialize source language
@@ -222,13 +229,17 @@ class MainFrame(wx.Frame):
             (wx.ACCEL_ALT, wx.WXK_LEFT, ID_FOCUS_SOURCE),
             (wx.ACCEL_ALT, wx.WXK_RIGHT, ID_FOCUS_TARGET),
             (wx.ACCEL_CTRL, ord('F'), ID_SEARCH),
-            (wx.ACCEL_ALT, ord('J'), ID_JUMP)
+            (wx.ACCEL_ALT, ord('J'), ID_JUMP),
+            (wx.ACCEL_ALT, ord('C'), ID_FOCUS_NOTES),
+            (wx.ACCEL_ALT, ord('U'), ID_FOCUS_PLURAL),
         ])
         self.SetAcceleratorTable(accel_tbl)
         self.Bind(wx.EVT_MENU, self.on_next_entry, id=ID_NEXT_ENTRY)
         self.Bind(wx.EVT_MENU, self.on_prev_entry, id=ID_PREVIOUS_ENTRY)
         self.Bind(wx.EVT_MENU, self.on_focus_source, id=ID_FOCUS_SOURCE)
         self.Bind(wx.EVT_MENU, self.on_focus_target, id=ID_FOCUS_TARGET)
+        self.Bind(wx.EVT_MENU, self.on_focus_notes, id=ID_FOCUS_NOTES)
+        self.Bind(wx.EVT_MENU, self.on_focus_plural, id=ID_FOCUS_PLURAL)
         self.Bind(wx.EVT_MENU, self.on_show_search_dialog, id=ID_SEARCH)
         self.Bind(wx.EVT_MENU, self.on_show_jump_dialog, id=ID_JUMP)
 
@@ -236,6 +247,24 @@ class MainFrame(wx.Frame):
         if hasattr(self, 'src_text_ctrl'): self.src_text_ctrl.SetFocus()
     def on_focus_target(self, event):
         if hasattr(self, 'tgt_text_ctrl'): self.tgt_text_ctrl.SetFocus()
+    def on_focus_notes(self, event):
+        if hasattr(self, 'notes_text_ctrl'): self.notes_text_ctrl.SetFocus()
+    def on_focus_plural(self, event):
+        ctrl = getattr(self, 'plural_choice', None)
+        if ctrl and ctrl.IsShown(): ctrl.SetFocus()
+
+    def on_plural_form_change(self, event):
+        """Switch which msgstr[n] the target box edits, keeping the edit made
+        to the form we are leaving."""
+        try:
+            self.save_current_entry_changes()
+            forms = plural_forms(self.translated_po_entries[self.current_entry_index])
+            selection = self.plural_choice.GetSelection()
+            if 0 <= selection < len(forms):
+                self.current_plural_form = forms[selection]
+            self.display_current_entry()
+        except Exception as e:
+            self.logger.error(f"Exception in on_plural_form_change: {e}", exc_info=True)
 
     def on_show_search_dialog(self, event):
         if not self.translated_po_entries: return
@@ -259,7 +288,13 @@ class MainFrame(wx.Frame):
         indices = list(range(len(self.translated_po_entries)))
         search_order = (indices[start_index:] + indices[:start_index]) if forward else (indices[:start_index+1][::-1] + indices[start_index+1:][::-1])
         for i in search_order:
-            entry = self.translated_po_entries[i]; source_text = entry.get("msgid", "").lower(); target_text = entry.get("msgstr", "").lower()
+            entry = self.translated_po_entries[i]
+            # Plural entries keep their translations in msgstr[n], so search
+            # those too or plural strings become unfindable by target text.
+            source_text = " ".join([entry.get("msgid", ""), entry.get("source_plural", "") or ""]).lower()
+            target_text = " ".join(
+                [entry.get("msgstr", "") or ""] + [str(v) for v in (entry.get("target_plurals") or {}).values()]
+            ).lower()
             match = False
             if scope == 0 and term in source_text: match = True
             elif scope == 1 and term in target_text: match = True
@@ -924,12 +959,53 @@ class MainFrame(wx.Frame):
         try:
             if 0 <= self.current_entry_index < len(self.translated_po_entries):
                 if hasattr(self, 'tgt_text_ctrl') and self.tgt_text_ctrl:
-                    self.translated_po_entries[self.current_entry_index]["msgstr"] = self.tgt_text_ctrl.GetValue()
+                    entry = self.translated_po_entries[self.current_entry_index]
+                    # For a plural entry this writes msgstr[n]; msgstr itself is
+                    # ignored by gettext once msgid_plural is present.
+                    set_target_for_form(entry, self.current_plural_form, self.tgt_text_ctrl.GetValue())
                     self.request_autosave()
                 else:
                     self.logger.warning("tgt_text_ctrl not available in save_current_entry_changes")
         except Exception as e:
             self.logger.error(f"Exception in save_current_entry_changes: {e}", exc_info=True)
+
+    def _update_plural_selector(self, entry):
+        """Show the plural-form picker for entries that have a msgid_plural,
+        hide it for ordinary ones, and keep ``current_plural_form`` valid."""
+        choice = getattr(self, 'plural_choice', None)
+        label = getattr(self, 'plural_label', None)
+        forms = plural_forms(entry)
+        # Moving to a different entry always lands on the singular form.
+        if getattr(self, '_plural_anchor_index', None) != self.current_entry_index:
+            self._plural_anchor_index = self.current_entry_index
+            self.current_plural_form = forms[0] if forms else None
+        if not forms:
+            self.current_plural_form = None
+        elif self.current_plural_form not in forms:
+            self.current_plural_form = forms[0]
+        if not choice or not label:
+            return
+        try:
+            if forms:
+                labels = [form_label(f) for f in forms]
+                if choice.GetStrings() != labels:
+                    choice.SetItems(labels)
+                choice.SetSelection(forms.index(self.current_plural_form))
+                label.Show()
+                choice.Show()
+            else:
+                label.Hide()
+                choice.Hide()
+            self.panel.Layout()
+        except Exception as e:  # noqa: BLE001
+            self.logger.error(f"Plural selector update failed: {e}", exc_info=True)
+
+    def _update_notes(self, entry):
+        """Render the PO comments for this entry into the read-only notes box."""
+        ctrl = getattr(self, 'notes_text_ctrl', None)
+        if not ctrl:
+            return
+        ctrl.SetValue(format_entry_notes(entry))
 
     def display_current_entry(self):
         """Safely display current entry with comprehensive error handling."""
@@ -944,10 +1020,13 @@ class MainFrame(wx.Frame):
             entry = self.translated_po_entries[self.current_entry_index]
             self.logger.debug(f"Processing entry: {entry.get('msgid', '')[:50]}...")
 
+            self._update_plural_selector(entry)
+            self._update_notes(entry)
+
             # Safely access UI controls with existence checks
             if hasattr(self, 'src_text_ctrl') and self.src_text_ctrl:
                 self.logger.debug("Setting source text control value")
-                self.src_text_ctrl.SetValue(entry.get("msgid", ""))
+                self.src_text_ctrl.SetValue(source_for_form(entry, self.current_plural_form))
                 self.logger.debug("Source text control updated successfully")
             else:
                 self.logger.error("src_text_ctrl not available - THIS IS THE CRASH POINT!")
@@ -955,7 +1034,7 @@ class MainFrame(wx.Frame):
 
             if hasattr(self, 'tgt_text_ctrl') and self.tgt_text_ctrl:
                 self.logger.debug("Setting target text control value")
-                self.tgt_text_ctrl.SetValue(entry.get("msgstr", ""))
+                self.tgt_text_ctrl.SetValue(target_for_form(entry, self.current_plural_form))
                 self.logger.debug("Target text control updated successfully")
             else:
                 self.logger.error("tgt_text_ctrl not available - THIS IS THE CRASH POINT!")

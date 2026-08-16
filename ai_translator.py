@@ -5,6 +5,8 @@ import logging
 import time
 import re
 from local_model_manager import LocalModelManager
+from mutt.logic.plurals import plural_forms, set_target_for_form
+from mutt.logic.notes import guidance_notes
 
 # Share the MainFrame's logger so [OpenAI] traces land in mutt_debug.log.
 _logger = logging.getLogger("MUTT")
@@ -224,15 +226,23 @@ class AITranslator:
                 )
             # Resolve strategy from extra settings. Default to 'prompt_install' so the UI can handle it.
             strategy = self.extra_settings.get("argos_strategy", "prompt_install") if isinstance(self.extra_settings, dict) else "prompt_install"
-            items = [entry for entry in entries if not entry.get('obsolete')]
+            # Same job expansion as the LLM path: a plural entry needs both its
+            # singular and plural source translated, one per msgstr[n].
+            items = []
+            for entry in entries:
+                if entry.get('obsolete'):
+                    continue
+                items.append((entry, None if not entry.get('source_plural') else 0))
+                if entry.get('source_plural'):
+                    items.append((entry, 1))
             total = len(items)
             translated_texts = []
             cancelled = False
-            for idx, entry in enumerate(items):
+            for idx, (entry, form) in enumerate(items):
                 if cancel_check and cancel_check():
                     cancelled = True
                     break
-                src_text = entry.get('msgid', '')
+                src_text = entry.get('msgid', '') if form in (None, 0) else entry.get('source_plural', '')
                 try:
                     # The pivot_order is no longer needed, as the new engine handles it.
                     translated = argos_engine.translate_text(src_text, source_lang, target_lang, strategy=strategy)
@@ -250,13 +260,18 @@ class AITranslator:
             # strings. Bounded by what was actually translated so a cancelled
             # run keeps its partial output instead of raising IndexError.
             result_entries = [dict(entry) for entry in entries]
-            i = 0
-            for idx, entry in enumerate(result_entries):
-                if not entry.get('obsolete'):
-                    if i >= len(translated_texts):
-                        break
-                    result_entries[idx]['msgstr'] = translated_texts[i]
-                    i += 1
+            entry_positions = {id(entry): idx for idx, entry in enumerate(entries)}
+            for k, (entry, form) in enumerate(items):
+                if k >= len(translated_texts):
+                    break
+                target = result_entries[entry_positions[id(entry)]]
+                if form is None:
+                    target['msgstr'] = translated_texts[k]
+                elif form == 0:
+                    set_target_for_form(target, 0, translated_texts[k])
+                else:
+                    for plural_form in plural_forms(target)[1:]:
+                        set_target_for_form(target, plural_form, translated_texts[k])
             return result_entries, {"prompt_tokens": 0, "completion_tokens": 0, "cancelled": cancelled}
  
         # Existing LLM/batch path (unchanged)
@@ -282,14 +297,30 @@ class AITranslator:
                 raise RuntimeError(f"Hugging Face translation failed: {e}") from e
 
         result_entries = [dict(entry) for entry in entries]
-        items_to_translate = [entry for entry in entries if not entry.get('obsolete')]
-        if not items_to_translate:
+        # One "job" per string the model must translate. A plural entry
+        # contributes two — the singular msgid and the msgid_plural — because
+        # gettext keeps a separate msgstr[n] for each. Translating only msgid
+        # used to write a target that polib then discarded on save, silently
+        # losing every plural translation.
+        jobs = []
+        for i, entry in enumerate(entries):
+            if entry.get('obsolete'):
+                continue
+            pos = (po_entries_positions[i]
+                   if po_entries_positions is not None and i < len(po_entries_positions)
+                   else None)
+            if entry.get('source_plural'):
+                jobs.append({'index': i, 'form': 0, 'text': entry.get('msgid', ''), 'pos': pos, 'entry': entry})
+                jobs.append({'index': i, 'form': 1, 'text': entry.get('source_plural', ''), 'pos': pos, 'entry': entry})
+            else:
+                jobs.append({'index': i, 'form': None, 'text': entry.get('msgid', ''), 'pos': pos, 'entry': entry})
+
+        if not jobs:
             return result_entries, {"prompt_tokens": 0, "completion_tokens": 0}
 
-        # Parallel list of positions in ``all_po_entries`` for each item in
-        # ``items_to_translate``. Allows a correct per-sub-batch context
-        # window even when entries have been filtered (non-contiguous) or
-        # share duplicate msgids.
+        # Parallel list of positions in ``all_po_entries`` for each job.
+        # Allows a correct per-sub-batch context window even when entries have
+        # been filtered (non-contiguous) or share duplicate msgids.
         item_positions = None
         context_enabled = bool(
             all_po_entries is not None
@@ -297,18 +328,15 @@ class AITranslator:
             and (context_previous_size > 0 or context_next_size > 0)
         )
         if context_enabled:
-            non_obsolete_idx_map = [
-                po_entries_positions[i]
-                for i, e in enumerate(entries)
-                if not e.get('obsolete') and i < len(po_entries_positions)
-            ]
-            if len(non_obsolete_idx_map) == len(items_to_translate):
-                item_positions = non_obsolete_idx_map
+            job_positions = [j['pos'] for j in jobs]
+            if all(p is not None for p in job_positions):
+                item_positions = job_positions
             else:
-                # Lengths don't line up — don't risk wrong anchors, disable.
+                # Positions didn't resolve — don't risk wrong anchors, disable.
                 context_enabled = False
 
-        msgids_to_translate = [e['msgid'] for e in items_to_translate]
+        items_to_translate = jobs
+        msgids_to_translate = [j['text'] for j in jobs]
         final_translated_texts = []
         total_prompt_tokens, total_completion_tokens = 0, 0
         effective_batch_size = self.batch_size
@@ -321,7 +349,7 @@ class AITranslator:
                 cancelled = True
                 break
             primary_end = min(i + effective_batch_size, len(items_to_translate))
-            batch_items = items_to_translate[i:primary_end]
+            batch_jobs = items_to_translate[i:primary_end]
             batch_msgids = msgids_to_translate[i:primary_end]
             estimated_tokens = sum(len(text.split()) * 1.5 for text in batch_msgids) + 500
 
@@ -349,8 +377,10 @@ class AITranslator:
                             "next":     all_po_entries[max_pos + 1:min(total_all, max_pos + 1 + context_next_size)],
                         }
 
+                sub_entries = [j['entry'] for j in batch_jobs[sub_start:sub_end]]
                 translated_sub_batch, usage = self._process_batch(
-                    sub_msgids, source_lang, target_lang, context, window
+                    sub_msgids, source_lang, target_lang, context, window,
+                    batch_entries=sub_entries,
                 )
                 final_translated_texts.extend(translated_sub_batch)
                 total_prompt_tokens += usage.get('prompt_tokens', 0)
@@ -361,16 +391,25 @@ class AITranslator:
 
             time.sleep(1)
 
-        # Merge back by position (not by msgid) to handle duplicate source
-        # strings. Bounded by what was actually translated so a cancelled run
-        # keeps its partial output instead of raising IndexError.
-        i = 0
-        for idx, entry in enumerate(result_entries):
-            if not entry.get('obsolete'):
-                if i >= len(final_translated_texts):
-                    break
-                result_entries[idx]['msgstr'] = final_translated_texts[i]
-                i += 1
+        # Merge back by job (not by msgid) to handle duplicate source strings.
+        # Bounded by what was actually translated so a cancelled run keeps its
+        # partial output instead of raising IndexError.
+        for k, job in enumerate(jobs):
+            if k >= len(final_translated_texts):
+                break
+            target = result_entries[job['index']]
+            text = final_translated_texts[k]
+            if job['form'] is None:
+                target['msgstr'] = text
+            elif job['form'] == 0:
+                set_target_for_form(target, 0, text)
+            else:
+                # gettext gives the source only two forms; every target form
+                # beyond the first is seeded from msgid_plural. Languages with
+                # more than two forms get a sane starting point the translator
+                # then adjusts per form in the review panel.
+                for form in plural_forms(target)[1:]:
+                    set_target_for_form(target, form, text)
 
         return result_entries, {"prompt_tokens": total_prompt_tokens, "completion_tokens": total_completion_tokens, "cancelled": cancelled}
 
@@ -386,14 +425,34 @@ class AITranslator:
         )
 
     # FIX: Restored a clearer, more structured user prompt.
-    def _build_user_prompt(self, batch_texts, source_lang, target_lang, context, surrounding_context=None):
-        """Builds the user-facing prompt with instructions and data, including surrounding context."""
+    def _build_user_prompt(self, batch_texts, source_lang, target_lang, context,
+                           surrounding_context=None, batch_entries=None):
+        """Builds the user-facing prompt with instructions and data, including
+        surrounding context and any per-string translator/extractor comments."""
         prompt_lines = [
             f"Translate the following JSON array of strings from '{source_lang}' to '{target_lang}'.",
             "The translated strings in the output JSON array MUST be in the exact same order as the input array.",
         ]
         if context:
             prompt_lines.append(f"Use this context for all translations: {context}")
+
+        # Per-string comments from the source file. These are the notes the
+        # original developers and translators wrote precisely to disambiguate
+        # these strings, so they are worth the tokens.
+        if batch_entries:
+            note_lines = []
+            for position, entry in enumerate(batch_entries):
+                if not isinstance(entry, dict):
+                    continue
+                guidance = guidance_notes(entry)
+                if guidance:
+                    note_lines.append(f"- Item {position}: {guidance}")
+            if note_lines:
+                prompt_lines.append(
+                    "\nNotes for specific items below (index into the input array). "
+                    "Follow them; they come from the file's own translator and developer comments:"
+                )
+                prompt_lines.extend(note_lines)
 
         if surrounding_context:
             # ``surrounding_context`` may be either the modern dict form
@@ -501,8 +560,10 @@ class AITranslator:
         # As a last resort raise a JSONDecodeError to be handled by caller
         raise json.JSONDecodeError("Could not extract a valid JSON object/array from the model response", text, 0)
 
-    def _process_batch(self, batch_texts, source_lang, target_lang, context, surrounding_context=None):
-        user_prompt = self._build_user_prompt(batch_texts, source_lang, target_lang, context, surrounding_context)
+    def _process_batch(self, batch_texts, source_lang, target_lang, context,
+                       surrounding_context=None, batch_entries=None):
+        user_prompt = self._build_user_prompt(batch_texts, source_lang, target_lang, context,
+                                              surrounding_context, batch_entries)
         system_prompt = self._get_system_prompt()
 
         try:
