@@ -29,6 +29,14 @@ class SearchDialog(wx.Dialog):
         find_prev_btn.Bind(wx.EVT_BUTTON, self.on_find_prev)
         find_next_btn.Bind(wx.EVT_BUTTON, self.on_find_next)
         self.Bind(wx.EVT_CLOSE, self.on_close)
+        # Modeless dialogs don't get wx's built-in Escape handling.
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_char_hook)
+
+    def on_char_hook(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self.Close()
+            return
+        event.Skip()
 
     def on_find_prev(self, event):
         self.parent.find_entry(self.search_text.GetValue(), self.scope_radio.GetSelection(), forward=False)

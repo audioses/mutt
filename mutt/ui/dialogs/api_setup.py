@@ -47,7 +47,10 @@ class APISetupDialog(wx.Dialog):
 
     def setup_basic_tab(self):
         sizer = wx.BoxSizer(wx.VERTICAL)
-        self.provider_radio = wx.RadioBox(self.basic_tab, label="API Provider", choices=self.api_choices, majorDimension=2, style=wx.RA_SPECIFY_COLS)
+        # Single column: in a multi-column RadioBox Up/Down only walks one
+        # column, so providers in the second column (Gemini, Custom,
+        # HuggingFace) were unreachable with the arrow keys alone.
+        self.provider_radio = wx.RadioBox(self.basic_tab, label="API Provider", choices=self.api_choices, majorDimension=1, style=wx.RA_SPECIFY_COLS)
         sizer.Add(self.provider_radio, 0, wx.ALL | wx.EXPAND, 5)
 
         sizer.Add(wx.StaticText(self.basic_tab, label="API Key:"), 0, wx.ALL, 5)

@@ -83,14 +83,18 @@ def create_review_panel(frame):
         
         frame.logger.debug(f"Found {len(frame.tool_choices)} tool choices: {frame.tool_choices}")
 
-        if frame.tool_choices:
-            frame.logger.debug("Creating chat mode radio with tool choices")
-            frame.chat_mode_radio = wx.RadioBox(frame.panel, label="Tool Mode", choices=frame.tool_choices, majorDimension=3, style=wx.RA_SPECIFY_COLS)
-            toolbox_sizer.Add(frame.chat_mode_radio, 0, wx.ALL | wx.EXPAND, 5)
-        else:
-            frame.logger.warning("No tool choices available, creating empty radio")
-            frame.chat_mode_radio = wx.RadioBox(frame.panel, label="Tool Mode", choices=["No tools available"], majorDimension=1, style=wx.RA_SPECIFY_COLS)
-            toolbox_sizer.Add(frame.chat_mode_radio, 0, wx.ALL | wx.EXPAND, 5)
+        # A dropdown rather than a RadioBox: the 3-column RadioBox this
+        # replaced could only be arrowed within one column, leaving most tools
+        # unreachable from the keyboard. A single-column RadioBox would fix
+        # that but adds a row per tool to an already tall panel; a Choice is
+        # one row and Up/Down walks every entry. (Attribute name kept â€” the
+        # tool handlers read chat_mode_radio.GetStringSelection().)
+        if not frame.tool_choices:
+            frame.logger.warning("No tool choices available")
+        toolbox_sizer.Add(wx.StaticText(frame.panel, label="Tool Mode:"), 0, wx.ALL, 5)
+        frame.chat_mode_radio = wx.Choice(frame.panel, choices=frame.tool_choices or ["No tools available"])
+        frame.chat_mode_radio.SetSelection(0)  # a Choice starts unselected
+        toolbox_sizer.Add(frame.chat_mode_radio, 0, wx.ALL | wx.EXPAND, 5)
 
         # Variation panel
         frame.logger.debug("Creating variation panel")
@@ -165,7 +169,7 @@ def create_review_panel(frame):
         frame.tool_button.Bind(wx.EVT_BUTTON, frame.on_tool_execute)
         frame.tool_input.Bind(wx.EVT_TEXT_ENTER, frame.on_tool_execute)
         frame.variation_custom_prompt.Bind(wx.EVT_TEXT_ENTER, frame.on_tool_execute)
-        frame.chat_mode_radio.Bind(wx.EVT_RADIOBOX, frame.on_chat_mode_change)
+        frame.chat_mode_radio.Bind(wx.EVT_CHOICE, frame.on_chat_mode_change)
         frame.tool_results_list.Bind(wx.EVT_LISTBOX_DCLICK, frame.on_variation_select)
         frame.tool_results_list.Bind(wx.EVT_KEY_DOWN, frame.on_results_key_down)
         frame.logger.debug("All events bound successfully")
