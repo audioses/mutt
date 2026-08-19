@@ -48,7 +48,7 @@ from mutt.logic.notes import format_entry_notes
 from mutt.logic.file_operations import (
     on_open_file, on_open_project, on_load_ignore_list, on_save_changes,
     on_save_project, _save_project_file, _load_project_file,
-    _update_translation_memory
+    _update_translation_memory, on_select_termbase
 )
 from mutt.logic.autosave import AutosaveManager, RecoverableSession
 
@@ -85,7 +85,10 @@ class MainFrame(wx.Frame):
         # entries without a msgid_plural).
         self.current_plural_form = None
         self.file_ignore_rules = [] # NEW: for file-based ignore rules
-        self.translation_memory = TranslationMemory() # NEW: Initialize TranslationMemory
+        # Active termbase / TM. Selectable per project via Settings menu.
+        self.translation_memory = TranslationMemory(
+            self.config.get("tm_path") or "translation_memory.json"
+        )
         self.source_language = "en" # Initialize source language
         self.target_language = "es" # Initialize target language
 
@@ -666,9 +669,17 @@ class MainFrame(wx.Frame):
                 self.logger.debug("Processing tool completion event")
                 self.tool_results_list.Clear()
                 if isinstance(event.result, list):
-                    self.tool_results_list.Set(event.result)
+                    lines = [str(item) for item in event.result if str(item).strip()]
                 else:
-                    self.tool_results_list.Append(event.result)
+                    # One list item per line: a multi-line answer was a single
+                    # unusable row before, so any advice had to be copy-pasted.
+                    lines = [ln.strip() for ln in str(event.result).splitlines() if ln.strip()]
+                if lines:
+                    self.tool_results_list.Set(lines)
+                    # Pre-select and focus so Enter replaces the translation
+                    # straight away instead of doing nothing.
+                    self.tool_results_list.SetSelection(0)
+                    self.tool_results_list.SetFocus()
                 self.tool_button.Enable(True)
 
         except Exception as e:
@@ -1067,6 +1078,9 @@ class MainFrame(wx.Frame):
 
     def on_load_ignore_list(self, event):
         on_load_ignore_list(self, event)
+
+    def on_select_termbase(self, event):
+        on_select_termbase(self, event)
 
     def on_save_changes(self, event, batch_mode=False):
         on_save_changes(self, event, batch_mode)

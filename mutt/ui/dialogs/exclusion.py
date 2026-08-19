@@ -149,6 +149,15 @@ class ExclusionRulesManagerDialog(wx.Dialog):
         add_btn.Bind(wx.EVT_BUTTON, self.on_add_rule)
         remove_btn.Bind(wx.EVT_BUTTON, self.on_remove_rule)
         close_btn.Bind(wx.EVT_BUTTON, self.on_close)
+        self.rules_listbox.Bind(wx.EVT_KEY_DOWN, self.on_rules_key_down)
+
+    def on_rules_key_down(self, event):
+        """Delete/Backspace on a selected rule removes it (same confirm as the
+        Remove button)."""
+        if event.GetKeyCode() in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE, wx.WXK_BACK):
+            self.on_remove_rule(event)
+        else:
+            event.Skip()
 
     def populate_rules_list(self):
         self.rules_listbox.Clear()

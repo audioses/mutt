@@ -454,6 +454,23 @@ class AITranslator:
                 )
                 prompt_lines.extend(note_lines)
 
+        # Approved translations from the active termbase / TM. Advisory, not
+        # a find-and-replace: the same term is translated differently in
+        # different contexts, so the model gets the last word.
+        if self.glossary:
+            batch_lower = [t.lower() for t in batch_texts if t]
+            relevant = [(src, tgt) for src, tgt in self.glossary.items()
+                        if any(src.lower() in text for text in batch_lower)]
+            relevant.sort(key=lambda pair: len(pair[0]), reverse=True)
+            if relevant:
+                prompt_lines.append(
+                    "\nPreviously approved translations for terms appearing below. "
+                    "Prefer them for consistency, but override any that do not fit "
+                    "this context:"
+                )
+                for src, tgt in relevant[:40]:
+                    prompt_lines.append(f"- \"{src}\" -> \"{tgt}\"")
+
         if surrounding_context:
             # ``surrounding_context`` may be either the modern dict form
             # (``{"previous": [...], "next": [...]}`` — set by

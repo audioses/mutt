@@ -5,10 +5,26 @@ from mutt.constants import UpdateEvent, ResultEvent
 def run_translation_thread(parent_frame, active_provider, settings, context):
     def p_cb(p, t): wx.PostEvent(parent_frame, UpdateEvent(value=p, total=t))
     try:
+        # Termbase hints: approved translations for terms that actually occur
+        # in this run. Advisory only - _build_user_prompt tells the model it
+        # may override them when the context differs.
+        glossary = {}
+        try:
+            tm = getattr(parent_frame, "translation_memory", None)
+            if tm is not None and parent_frame.config.get("use_termbase", True):
+                glossary = tm.find_matches(
+                    [e.get("msgid", "") for e in (parent_frame.po_entries or [])],
+                    parent_frame.source_language,
+                    parent_frame.target_language,
+                )
+        except Exception:
+            parent_frame.logger.exception("Termbase lookup failed; continuing without it")
+
         translator = AITranslator(
             active_provider,
             settings.get("api_key"),
             settings.get("api_model"),
+            glossary=glossary,
             batch_size=parent_frame.config.get("batch_size", 50),
             temperature=parent_frame.config.get("temperature", 0.1),
             max_tokens=parent_frame.config.get("max_tokens", 4000),

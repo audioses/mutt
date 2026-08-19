@@ -18,6 +18,7 @@ def create_menu_bar(frame):
     settings_menu = wx.Menu()
     api_item = settings_menu.Append(wx.ID_ANY, "&API Settings...")
     prompt_item = settings_menu.Append(wx.ID_ANY, "Manage &Prompts...")
+    termbase_item = settings_menu.Append(wx.ID_ANY, "Select &Termbase...")
     menu_bar.Append(settings_menu, "&Settings")
 
     # NEW: Tools Menu
@@ -39,6 +40,7 @@ def create_menu_bar(frame):
     frame.Bind(wx.EVT_MENU, frame.on_exit, exit_item)
     frame.Bind(wx.EVT_MENU, frame.on_api_settings, api_item)
     frame.Bind(wx.EVT_MENU, frame.on_manage_prompts, prompt_item)
+    frame.Bind(wx.EVT_MENU, frame.on_select_termbase, termbase_item)
     frame.Bind(wx.EVT_MENU, frame.on_manage_exclusion_rules, manage_exclusion_rules_item) # NEW: Bind exclusion rules manager
     frame.Bind(wx.EVT_MENU, frame.on_export_exclusion_rules, export_exclusion_rules_item) # NEW: Bind export exclusion rules
     frame.Bind(wx.EVT_MENU, frame.on_show_statistics, stats_item)

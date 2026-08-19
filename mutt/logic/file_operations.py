@@ -179,6 +179,33 @@ def on_load_ignore_list(frame, event):
             except Exception as e:
                 wx.MessageBox(f"Error loading ignore list: {e}", "Error", wx.OK | wx.ICON_ERROR)
 
+def on_select_termbase(frame, event):
+    """Pick which termbase / translation-memory file this project uses.
+
+    Different jobs need different termbases - the same term is translated
+    differently depending on the product. The choice is remembered in the
+    config and the file is created on first save if it does not exist yet.
+    """
+    from translation_memory import TranslationMemory
+    wildcard = "Termbase / TM (*.json)|*.json|All files (*.*)|*.*"
+    current = getattr(frame.translation_memory, 'db_path', '')
+    with wx.FileDialog(frame, "Select Termbase", defaultFile=os.path.basename(current or ''),
+                       wildcard=wildcard, style=wx.FD_SAVE) as dlg:
+        if dlg.ShowModal() != wx.ID_OK:
+            return
+        path = dlg.GetPath()
+    try:
+        frame.translation_memory = TranslationMemory(path)
+    except Exception as e:
+        wx.MessageBox(f"Could not load termbase: {e}", "Error", wx.OK | wx.ICON_ERROR)
+        return
+    frame.config['tm_path'] = path
+    frame.save_config()
+    count = len(frame.translation_memory.get_all_entries())
+    wx.MessageBox(f"Termbase set to {os.path.basename(path)} ({count} entries).",
+                  "Termbase", wx.OK | wx.ICON_INFORMATION)
+
+
 def _update_translation_memory(frame, saved_entries, silent=False):
     # Use stored instance variables for source and target languages
     src_lang = frame.source_language

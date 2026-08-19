@@ -52,3 +52,11 @@ def test_delete_entry(tmp_path: Path):
     assert tm.find_entry("hello", "en", "tr") is None
     # Deleting nonexistent returns False
     assert tm.delete_entry("hello", "merhaba", "en", "tr") is False
+
+
+def test_correction_overwrites_previous(tmp_path: Path):
+    tm = TranslationMemory(str(tmp_path / "tm.json"))
+    tm.add_entry("report usage", "kullanimi raporla", "en", "tr")
+    tm.add_entry("report usage", "kullanimi bildir", "en", "tr")
+    assert tm.find_entry("report usage", "en", "tr") == "kullanimi bildir"
+    assert len(tm.get_all_entries()) == 1

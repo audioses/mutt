@@ -92,9 +92,14 @@ class XLIFFHandler(FormatHandler):
         if not units:
             return
 
-        original_path = options.get('original_path', file_path)
-        if not Path(original_path).exists():
-             raise FormatHandlerError(f"Original file path for saving structure not found: {original_path}")
+        # Structure comes from the file we loaded; 'source_path' is what the
+        # rest of the handlers (and the app) pass. Falling back to file_path
+        # only helps when overwriting an existing file in place.
+        candidates = [options.get('original_path'), options.get('source_path'), file_path]
+        original_path = next((c for c in candidates if c and Path(c).exists()), None)
+        if original_path is None:
+             raise FormatHandlerError(
+                 f"Original file path for saving structure not found: {candidates[0] or candidates[1] or file_path}")
              
         try:
             tree = ET.parse(original_path)
