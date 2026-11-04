@@ -1,5 +1,7 @@
 import wx
 
+from ..utils import on_ctrl_backspace
+
 class PromptManagerDialog(wx.Dialog):
     def __init__(self, parent, prompts):
         super(PromptManagerDialog, self).__init__(parent, title="Prompt Manager", size=(750, 550))
@@ -15,7 +17,7 @@ class PromptManagerDialog(wx.Dialog):
         btn_sizer.Add(self.new_btn, 0, wx.ALL, 5); btn_sizer.Add(self.save_btn, 0, wx.ALL, 5); btn_sizer.Add(self.delete_btn, 0, wx.ALL, 5); right_sizer.Add(btn_sizer, 0, wx.ALIGN_LEFT); main_sizer.Add(right_sizer, 2, wx.EXPAND|wx.LEFT, 10)
         ok_cancel_sizer = wx.StdDialogButtonSizer(); ok_button = wx.Button(panel, wx.ID_OK); cancel_button = wx.Button(panel, wx.ID_CANCEL); ok_cancel_sizer.AddButton(ok_button); ok_cancel_sizer.AddButton(cancel_button); ok_cancel_sizer.Realize()
         top_sizer = wx.BoxSizer(wx.VERTICAL); top_sizer.Add(main_sizer, 1, wx.EXPAND|wx.ALL, 10); top_sizer.Add(ok_cancel_sizer, 0, wx.ALIGN_CENTER|wx.ALL, 10)
-        panel.SetSizer(top_sizer); self.populate_list(); self.clear_editor(); self.prompt_list.Bind(wx.EVT_LISTBOX, self.on_select_prompt); self.new_btn.Bind(wx.EVT_BUTTON, self.on_new); self.save_btn.Bind(wx.EVT_BUTTON, self.on_save); self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete); self.Bind(wx.EVT_BUTTON, self.on_ok, ok_button)
+        panel.SetSizer(top_sizer); self.populate_list(); self.clear_editor(); self.prompt_list.Bind(wx.EVT_LISTBOX, self.on_select_prompt); self.new_btn.Bind(wx.EVT_BUTTON, self.on_new); self.save_btn.Bind(wx.EVT_BUTTON, self.on_save); self.delete_btn.Bind(wx.EVT_BUTTON, self.on_delete); self.Bind(wx.EVT_BUTTON, self.on_ok, ok_button); self.Bind(wx.EVT_CHAR_HOOK, on_ctrl_backspace)
     def populate_list(self): self.prompt_list.Clear(); [self.prompt_list.Append(p["name"]) for p in self.prompts]
     def on_select_prompt(self, event):
         idx = self.prompt_list.GetSelection(); prompt_data = self.prompts[idx]; self.prompt_name.SetValue(prompt_data["name"]); self.prompt_content.SetValue(prompt_data["prompt"])

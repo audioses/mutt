@@ -6,11 +6,11 @@ from format_handlers.compatibility import LegacyCompatibilityAdapter
 from ..constants import PROJECT_FILE_EXT
 
 def on_open_file(frame, event):
-    wildcard = frame.format_manager.get_file_dialog_wildcard()
-    project_wildcard = f"Project (*{PROJECT_FILE_EXT})|*{PROJECT_FILE_EXT}"
-    full_wildcard = f"{project_wildcard}|{wildcard}"
+    # Projects fold into "All Supported Files" so the dialog opens showing every
+    # openable file instead of being filtered down to projects only.
+    wildcard = frame.format_manager.get_file_dialog_wildcard([PROJECT_FILE_EXT])
 
-    with wx.FileDialog(frame, "Open File", wildcard=full_wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as dlg:
+    with wx.FileDialog(frame, "Open File", wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as dlg:
         if dlg.ShowModal() == wx.ID_OK:
             path = dlg.GetPath()
             _, ext = os.path.splitext(path)

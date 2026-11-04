@@ -27,6 +27,9 @@ def test_format_manager_provides_wildcard_for_dialogs():
     mgr = FormatManager()
     wc = mgr.get_file_dialog_wildcard()
     assert isinstance(wc, str) and len(wc) > 0
+    # The first filter must be the catch-all, with extras folded into it
+    assert wc.startswith("All Supported Files (")
+    assert "*.mutt" in mgr.get_file_dialog_wildcard([".mutt"]).split("|")[1]
 
 
 def test_format_manager_can_detect_known_extensions(tmp_path):

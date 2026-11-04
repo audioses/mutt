@@ -31,6 +31,7 @@ from mutt.secure_keys import (
     hydrate_config,
 )
 from mutt.ui.menu import create_menu_bar
+from mutt.ui.utils import on_ctrl_backspace
 from mutt.ui.translation_panel import create_translation_panel
 from mutt.ui.dynamic_panel import create_dynamic_panel
 import yaml
@@ -109,6 +110,7 @@ class MainFrame(wx.Frame):
         self.Bind(EVT_UPDATE, self.on_update_progress)
         self.Bind(EVT_RESULT, self.on_result)
         self.Bind(wx.EVT_CLOSE, self.on_close_frame)
+        self.Bind(wx.EVT_CHAR_HOOK, on_ctrl_backspace)
 
         wx.CallAfter(self._offer_autosave_recovery)
 
@@ -408,6 +410,15 @@ class MainFrame(wx.Frame):
                    | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME),
         )
         self.Disable()
+        # Batches only report every few dozen entries, and the dialog's
+        # elapsed/remaining clock only advances when it is Updated — so tick it
+        # ourselves once a second, otherwise it sits at 0 for whole minutes.
+        self._progress_value = 0
+        self._progress_msg = "Starting..."
+        if not hasattr(self, '_progress_timer'):
+            self._progress_timer = wx.Timer(self)
+            self.Bind(wx.EVT_TIMER, self._on_progress_tick, self._progress_timer)
+        self._progress_timer.Start(1000)
         threading.Thread(
             target=run_translation_thread,
             args=(self, active_provider, settings, context),
@@ -488,21 +499,29 @@ class MainFrame(wx.Frame):
         self._begin_translation_run(active_provider, settings, context, "Translating...")
 
     def on_update_progress(self, event):
-        if not (hasattr(self, 'progress_dialog') and self.progress_dialog):
+        self._progress_value = event.value
+        self._progress_msg = f"Translated {event.value} of {event.total}..."
+        self._refresh_progress()
+
+    def _on_progress_tick(self, event):
+        self._refresh_progress()
+
+    def _refresh_progress(self):
+        if not getattr(self, 'progress_dialog', None):
             return
         if self.cancel_event.is_set():
             # Already cancelling — keep the dialog responsive but don't fight
             # the user's choice by resetting the message on every tick.
             self.progress_dialog.Pulse("Cancelling… finishing the current batch.")
             return
-        msg = f"Translated {event.value} of {event.total}..."
-        result = self.progress_dialog.Update(event.value, msg)
+        result = self.progress_dialog.Update(self._progress_value, self._progress_msg)
         # With PD_CAN_ABORT, Update returns (continue, skip); older builds may
         # return just a bool. Normalise both shapes.
         cont = result[0] if isinstance(result, tuple) else result
         if not cont:
             self.cancel_event.set()
             self.progress_dialog.Pulse("Cancelling… finishing the current batch.")
+
     def on_result(self, event):
         self.logger.info(f"on_result called with source: {getattr(event, 'source', 'unknown')}")
 
@@ -514,6 +533,10 @@ class MainFrame(wx.Frame):
             has_dialog = hasattr(self, 'progress_dialog')
             dialog_exists = has_dialog and self.progress_dialog is not None
             self.logger.debug(f"Progress dialog state - has_attr: {has_dialog}, exists: {dialog_exists}")
+
+            timer = getattr(self, '_progress_timer', None)
+            if timer:
+                timer.Stop()
 
             if has_dialog and self.progress_dialog:
                 self.logger.debug("Destroying progress dialog")

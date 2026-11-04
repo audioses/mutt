@@ -189,17 +189,21 @@ class FormatManager:
         handler = self.registry.get_handler_by_format_name(format_name)
         return handler.format_capabilities.to_dict() if handler else None
     
-    def get_file_dialog_wildcard(self) -> str:
+    def get_file_dialog_wildcard(self, extra_extensions=()) -> str:
         """
         Build file dialog wildcard string for all supported formats.
-        
+
+        Args:
+            extra_extensions: extra extensions (e.g. ['.mutt']) folded into the
+                "All Supported Files" filter, for files no handler owns
+
         Returns:
             Wildcard string suitable for wx.FileDialog
         """
         formats = self.get_supported_formats()
         wildcards = []
-        all_extensions = []
-        
+        all_extensions = [f"*{ext}" for ext in extra_extensions]
+
         for format_name, handler in formats.items():
             extensions = [f"*{ext}" for ext in handler.file_extensions]
             all_extensions.extend(extensions)
