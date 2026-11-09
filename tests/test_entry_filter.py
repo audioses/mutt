@@ -89,11 +89,15 @@ def test_ignore_rules_also_indexed_against_full_doc(nvda_doc, two_rules):
     assert [e["msgid"] for e in selected] == ["Security patch 2025.4.1"]
 
 
-def test_is_entry_untranslated_handles_msgid_equals_msgstr():
-    assert is_entry_untranslated({"msgid": "a", "msgstr": "a"})
-    assert is_entry_untranslated({"msgid": "a", "msgstr": ""})
-    assert is_entry_untranslated({"msgid": "a", "msgstr": None})
+def test_only_an_empty_target_counts_as_untranslated():
+    # A target identical to the source is a real translation: song titles and
+    # proper nouns read the same in both languages, and treating them as
+    # untranslated re-sent them to the model on every single run.
+    assert not is_entry_untranslated({"msgid": "a", "msgstr": "a"})
     assert not is_entry_untranslated({"msgid": "a", "msgstr": "b"})
+    assert is_entry_untranslated({"msgid": "a", "msgstr": ""})
+    assert is_entry_untranslated({"msgid": "a", "msgstr": "   "})
+    assert is_entry_untranslated({"msgid": "a", "msgstr": None})
 
 
 # --------------------------------------------------------------- merge-back

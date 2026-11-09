@@ -827,16 +827,7 @@ class MainFrame(wx.Frame):
         )
 
         selected, total = len(self.po_entries), len(self.all_po_entries)
-        # An entry whose target merely repeats the source counts as
-        # untranslated here, which is why this number can be far below the
-        # "needs work" count Poedit shows. Spell the split out instead of
-        # leaving the user to guess where the difference went.
-        repeats = sum(
-            1 for e in self.po_entries
-            if (e.get("msgstr") or "").strip() and e.get("msgstr") == e.get("msgid")
-        )
-        detail = f" ({repeats} of them only repeat the source text)" if repeats else ""
-        self.entry_info_text.SetLabel(f"{selected} of {total} entries selected.{detail}")
+        self.entry_info_text.SetLabel(f"{selected} of {total} entries selected.")
         # A StaticText cannot be focused and its changes are never announced,
         # so the count also rides on the button a screen reader lands on.
         self.translate_btn.SetLabel(

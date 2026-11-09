@@ -16,8 +16,14 @@ class _ExclusionLike(Protocol):
 
 
 def is_entry_untranslated(entry: dict) -> bool:
-    """An entry counts as untranslated when its target is empty or identical
-    to the source (a common "not yet touched" sentinel in PO/XLIFF files).
+    """An entry counts as untranslated when its target is empty.
+
+    A target identical to the source used to count as untranslated too, as a
+    "not yet touched" sentinel. It cost more than it bought: song titles,
+    proper nouns and product names are legitimately the same in both
+    languages, so they were re-sent to the model on every run, came back
+    unchanged, and were selected again - 541 of them in one 9,261-string
+    file, forever. Like gettext itself, a filled target is now a translation.
 
     Plural entries carry their targets in ``target_plurals`` (msgstr[n]) and
     leave ``msgstr`` empty, so they are judged on those forms instead: any
@@ -28,10 +34,7 @@ def is_entry_untranslated(entry: dict) -> bool:
         if not forms:
             return True
         return any(not (text or "").strip() for text in forms.values())
-    msgstr = (entry.get("msgstr") or "").strip()
-    if not msgstr:
-        return True
-    return entry.get("msgstr") == entry.get("msgid")
+    return not (entry.get("msgstr") or "").strip()
 
 
 def select_entries_for_translation(
