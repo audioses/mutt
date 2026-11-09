@@ -67,3 +67,6 @@ diag_argos.py
 /Format_Handler_System_Documentation.md
 /HTML_Workflow_Validation_Plan.md
 /POWERHOUSE_TOOLS.md
+
+# One-off merged translation output
+/tr_merged.po

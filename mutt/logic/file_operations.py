@@ -3,6 +3,7 @@ import os
 import json
 from pathlib import Path
 from format_handlers.compatibility import LegacyCompatibilityAdapter
+from .entry_filter import merge_reviewed_entries
 from ..constants import PROJECT_FILE_EXT
 
 def on_open_file(frame, event):
@@ -93,11 +94,18 @@ def on_save_changes(frame, event, batch_mode=False, save_as=False):
             output_path = dlg.GetPath()
 
     try:
-        translation_units = LegacyCompatibilityAdapter.from_legacy_format(entries_to_save)
+        # Write the WHOLE document, with the reviewed entries overlaid on it.
+        # "Translate untranslated" hands the translator a filtered subset, and
+        # saving that subset alone deleted every string the filter skipped.
+        reviewed_units = LegacyCompatibilityAdapter.from_legacy_format(entries_to_save)
+        document = merge_reviewed_entries(frame.all_po_entries, entries_to_save)
+        translation_units = LegacyCompatibilityAdapter.from_legacy_format(document)
         save_options = {'source_path': Path(frame.po_file_path)}
         frame.format_manager.save_file(translation_units, Path(output_path), **save_options)
         frame.last_save_path = output_path
-        _update_translation_memory(frame, translation_units, silent=True)
+        # Only reviewed strings feed the termbase; the rest of the document is
+        # pre-existing content we merely preserved.
+        _update_translation_memory(frame, reviewed_units, silent=True)
         # Quiet confirmation for silent re-saves; a modal only for the first
         # save / explicit Save As so the user knows where it went.
         _notify_saved(frame, output_path, silent=reuse or batch_mode)
@@ -131,6 +139,7 @@ def _save_project_file(frame, path):
         "original_file": frame.po_file_path,
         "file_type": frame.file_type,
         "review_entries": frame.translated_po_entries,
+        "all_entries": frame.all_po_entries,
         "current_index": frame.current_entry_index,
         "highest_reviewed_index": frame.highest_reviewed_index,
         "source_language": frame.source_language,
@@ -162,7 +171,9 @@ def _load_project_file(frame, path):
     from exprules import ExclusionManager # Import here to avoid circular dependency if it's already imported elsewhere
     frame.exclusion_manager = ExclusionManager.from_json(exclusion_rules_data)
 
-    frame.all_po_entries = frame.translated_po_entries
+    # The full document, needed to merge the reviewed subset back on save.
+    # Projects written before this field fall back to the review entries.
+    frame.all_po_entries = project_data.get("all_entries") or frame.translated_po_entries
 
 def on_load_ignore_list(frame, event):
     wildcard = "Text files (*.txt)|*.txt|All files (*.*)|*.*"

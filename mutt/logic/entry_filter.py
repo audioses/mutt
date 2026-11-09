@@ -66,3 +66,40 @@ def select_entries_for_translation(
             continue
         selected.append(entry)
     return selected
+
+
+def _merge_key(entry: dict):
+    """Address an entry for merging: the handler-assigned ``unit_id`` when the
+    entry has one, else the source string + context (older project files
+    predate ``unit_id``)."""
+    uid = entry.get("unit_id")
+    if uid not in (None, ""):
+        return ("id", uid)
+    return ("src", entry.get("msgctxt") or "", entry.get("msgid") or "")
+
+
+def merge_reviewed_entries(all_entries: list, reviewed: list) -> list:
+    """Overlay the reviewed/translated entries back onto the full document.
+
+    "Translate untranslated" hands the translator a *subset* of the document.
+    Saving that subset on its own deleted every entry the filter had skipped:
+    a 9,261-string PO came back with 7,743, losing all 1,518 already-translated
+    and fuzzy strings. Entries are matched by :func:`_merge_key`, which
+    survives the TranslationUnit <-> legacy-dict bridge and the JSON round-trip
+    through project/autosave files. An entry that matches nothing is appended
+    rather than dropped - a translation we hold is never thrown away.
+    """
+    if not all_entries:
+        return list(reviewed)
+    merged = list(all_entries)
+    slots: dict = {}
+    for i, entry in enumerate(merged):
+        slots.setdefault(_merge_key(entry), []).append(i)
+    appended = []
+    for entry in reviewed:
+        free = slots.get(_merge_key(entry))
+        if free:
+            merged[free.pop(0)] = entry
+        else:
+            appended.append(entry)
+    return merged + appended

@@ -1180,10 +1180,18 @@ class MainFrame(wx.Frame):
                 dict(entry) if isinstance(entry, dict) else entry
                 for entry in self.translated_po_entries
             ]
+            # The full document travels with the snapshot: without it a
+            # recovered session can no longer merge the reviewed subset back
+            # on save, and every filtered-out string would be lost again.
+            all_entries = [
+                dict(entry) if isinstance(entry, dict) else entry
+                for entry in self.all_po_entries
+            ]
             return {
                 "original_file": self.po_file_path,
                 "file_type": self.file_type,
                 "review_entries": review_entries,
+                "all_entries": all_entries,
                 "current_index": self.current_entry_index,
                 "highest_reviewed_index": self.highest_reviewed_index,
                 "source_language": self.source_language,
@@ -1284,7 +1292,13 @@ class MainFrame(wx.Frame):
         if not isinstance(entries, list):
             entries = []
         self.translated_po_entries = list(entries)
-        self.all_po_entries = list(self.translated_po_entries)
+        all_entries = data.get("all_entries")
+        # Snapshots written before "all_entries" existed only hold the
+        # reviewed subset; that is then all the document we have.
+        self.all_po_entries = (
+            list(all_entries) if isinstance(all_entries, list) and all_entries
+            else list(self.translated_po_entries)
+        )
         try:
             self.current_entry_index = int(data.get("current_index", 0) or 0)
         except (TypeError, ValueError):

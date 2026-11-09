@@ -11,6 +11,7 @@ import pytest
 from exprules import ExclusionManager
 from mutt.logic.entry_filter import (
     is_entry_untranslated,
+    merge_reviewed_entries,
     select_entries_for_translation,
 )
 
@@ -93,3 +94,49 @@ def test_is_entry_untranslated_handles_msgid_equals_msgstr():
     assert is_entry_untranslated({"msgid": "a", "msgstr": ""})
     assert is_entry_untranslated({"msgid": "a", "msgstr": None})
     assert not is_entry_untranslated({"msgid": "a", "msgstr": "b"})
+
+
+# --------------------------------------------------------------- merge-back
+# The second half of the same bug: "Translate untranslated" filters the
+# document, and saving the filtered subset deleted everything it skipped.
+
+
+def _doc():
+    return [
+        {"unit_id": "0", "msgid": "a", "msgstr": "A"},      # already translated
+        {"unit_id": "1", "msgid": "b", "msgstr": ""},       # selected
+        {"unit_id": "2", "msgid": "c", "msgstr": "C", "fuzzy": True},
+        {"unit_id": "3", "msgid": "d", "msgstr": ""},       # selected
+    ]
+
+
+def test_merge_keeps_the_whole_document():
+    doc = _doc()
+    selected = select_entries_for_translation(doc, 0)
+    assert [e["msgid"] for e in selected] == ["b", "d"]
+    reviewed = [dict(e, msgstr=e["msgid"].upper()) for e in selected]
+
+    merged = merge_reviewed_entries(doc, reviewed)
+
+    assert [e["msgid"] for e in merged] == ["a", "b", "c", "d"]
+    assert [e["msgstr"] for e in merged] == ["A", "B", "C", "D"]
+    assert merged[2]["fuzzy"] is True  # untouched entries keep their flags
+
+
+def test_merge_of_a_partial_review_leaves_the_rest_as_it_was():
+    doc = _doc()
+    reviewed = [dict(doc[1], msgstr="B")]  # only the first reviewed entry
+    merged = merge_reviewed_entries(doc, reviewed)
+    assert [e["msgstr"] for e in merged] == ["A", "B", "C", ""]
+
+
+def test_merge_never_drops_an_entry_it_cannot_place():
+    merged = merge_reviewed_entries(_doc(), [{"unit_id": "99", "msgid": "z", "msgstr": "Z"}])
+    assert len(merged) == 5
+    assert merged[-1]["msgid"] == "z"
+
+
+def test_merge_falls_back_to_the_source_string_without_unit_ids():
+    doc = [{"msgid": "a", "msgstr": "A"}, {"msgid": "b", "msgstr": ""}]
+    merged = merge_reviewed_entries(doc, [{"msgid": "b", "msgstr": "B"}])
+    assert [e["msgstr"] for e in merged] == ["A", "B"]
