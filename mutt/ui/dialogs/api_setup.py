@@ -6,6 +6,7 @@ try:
 except Exception:
     hf_engine = None
 
+from ai_translator import AITranslator
 from mutt.ui.dialogs.local_models import LocalModelDialog
 from mutt.ui.dialogs.hf import HuggingFacePanel
 from mutt.ui.dialogs.argos import ArgosModelDialog
@@ -79,8 +80,11 @@ class APISetupDialog(wx.Dialog):
         self.local_backend_radio = wx.RadioBox(self.basic_tab, label="", choices=["Llama.cpp", "LM Studio"], majorDimension=2, style=wx.RA_SPECIFY_COLS)
         sizer.Add(self.local_backend_radio, 0, wx.ALL | wx.EXPAND, 5)
 
-        sizer.Add(wx.StaticText(self.basic_tab, label="Batch Size:"), 0, wx.ALL, 5)
-        self.batch_size_spin = wx.SpinCtrl(self.basic_tab, min=1, max=50000, initial=self.config.get("batch_size", 50))
+        sizer.Add(wx.StaticText(self.basic_tab, label=f"Batch Size (1-{AITranslator.MAX_BATCH_SIZE}):"), 0, wx.ALL, 5)
+        self.batch_size_spin = wx.SpinCtrl(
+            self.basic_tab, min=1, max=AITranslator.MAX_BATCH_SIZE,
+            initial=min(int(self.config.get("batch_size", 50)), AITranslator.MAX_BATCH_SIZE),
+        )
         sizer.Add(self.batch_size_spin, 0, wx.ALL | wx.EXPAND, 5)
      
         # Argos-specific settings (hidden unless provider == Argos Translate)

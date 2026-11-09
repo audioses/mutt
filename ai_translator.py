@@ -93,12 +93,17 @@ def _is_reasoning_model(model_name: str) -> bool:
 
 
 class AITranslator:
+    # Past a couple of hundred strings a model stops returning the JSON array
+    # intact — a stray character or a miscount loses the whole response. Held
+    # here rather than in the dialog so older configs are capped too.
+    MAX_BATCH_SIZE = 200
+
     def __init__(self, api_provider, api_key, model_name, batch_size=50, glossary=None, local_backend="Llama.cpp", max_tokens=4000, temperature=0.1, max_batch_tokens=16000, extra_settings=None):
         self.api_provider = api_provider
         self.api_key = api_key
         self.glossary = glossary if glossary is not None else {}
         self.model_name = model_name
-        self.batch_size = int(batch_size)
+        self.batch_size = max(1, min(int(batch_size), self.MAX_BATCH_SIZE))
         self.max_tokens = max_tokens
         self.temperature = temperature
         self._client = None  # Use a private variable for the client
@@ -515,6 +520,40 @@ class AITranslator:
 
         return "\n".join(prompt_lines)
 
+    @staticmethod
+    def _repair_model_json(text: str) -> str:
+        """Fix the two ways models garble a long JSON response mid-stream:
+        a raw newline/tab left unescaped inside a string, and a stray '.'
+        or ';' dropped between array elements. String-aware, so neither
+        repair can touch the translated text itself.
+        shortcut: only these two glitches, widen when a new one shows up.
+        """
+        backslash = chr(92)
+        escapes = {"\n": backslash + "n", "\r": backslash + "r", "\t": backslash + "t"}
+        out = []
+        in_string = False
+        escape = False
+        for ch in text:
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == backslash:
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                if ord(ch) < 0x20:
+                    out.append(escapes.get(ch, " "))
+                    continue
+            elif ch == '"':
+                in_string = True
+            elif ch in ".;":
+                # Junk where only a value may start, e.g. '"a",. "b"'.
+                prev = next((c for c in reversed(out) if not c.isspace()), "")
+                if prev in ",[{:":
+                    continue
+            out.append(ch)
+        return "".join(out)
+
     def _extract_json_from_text(self, text: str) -> str:
         """
         Attempt to extract a valid JSON substring from the given text.
@@ -530,6 +569,16 @@ class AITranslator:
             return text
         except Exception:
             pass
+
+        # Second attempt: repair the usual mid-stream corruption, then retry.
+        repaired = self._repair_model_json(text)
+        if repaired != text:
+            try:
+                json.loads(repaired)
+                return repaired
+            except Exception:
+                # Keep the repair for the brace search below — it can only help.
+                text = repaired
 
         # Search for a JSON object or array starting point
         for start_char, end_char in (('{', '}'), ('[', ']')):
@@ -577,8 +626,47 @@ class AITranslator:
         # As a last resort raise a JSONDecodeError to be handled by caller
         raise json.JSONDecodeError("Could not extract a valid JSON object/array from the model response", text, 0)
 
+    # A batch that died this way is worth splitting and retrying; anything
+    # else (auth, quota, network) would just fail again, twice as often.
+    _SPLITTABLE_ERROR_MARKERS = (
+        "failed to extract json", "malformed list", "empty response",
+        "context length", "context_length_exceeded", "maximum context",
+    )
+
+    # Four halvings turn a 1000-entry batch into ~60 and cost at most ~30
+    # extra calls; past that the model, not the batch size, is the problem.
+    _MAX_BATCH_SPLITS = 4
+
     def _process_batch(self, batch_texts, source_lang, target_lang, context,
-                       surrounding_context=None, batch_entries=None):
+                       surrounding_context=None, batch_entries=None, _depth=0):
+        """Translate one batch, halving it and retrying when the model
+        garbles a response that is too long to come back intact."""
+        try:
+            return self._process_batch_once(batch_texts, source_lang, target_lang,
+                                            context, surrounding_context, batch_entries)
+        except Exception as exc:
+            msg = str(exc).lower()
+            if (len(batch_texts) < 2 or _depth >= self._MAX_BATCH_SPLITS
+                    or not any(m in msg for m in self._SPLITTABLE_ERROR_MARKERS)):
+                raise
+            mid = len(batch_texts) // 2
+            print(f"Batch of {len(batch_texts)} failed ({exc}) — retrying as two halves.")
+            texts = []
+            usage = {"prompt_tokens": 0, "completion_tokens": 0}
+            for lo, hi in ((0, mid), (mid, len(batch_texts))):
+                part_texts, part_usage = self._process_batch(
+                    batch_texts[lo:hi], source_lang, target_lang, context,
+                    surrounding_context,
+                    batch_entries[lo:hi] if batch_entries else None,
+                    _depth + 1,
+                )
+                texts.extend(part_texts)
+                usage["prompt_tokens"] += part_usage.get("prompt_tokens", 0)
+                usage["completion_tokens"] += part_usage.get("completion_tokens", 0)
+            return texts, usage
+
+    def _process_batch_once(self, batch_texts, source_lang, target_lang, context,
+                            surrounding_context=None, batch_entries=None):
         user_prompt = self._build_user_prompt(batch_texts, source_lang, target_lang, context,
                                               surrounding_context, batch_entries)
         system_prompt = self._get_system_prompt()
