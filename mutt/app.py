@@ -427,7 +427,9 @@ class MainFrame(wx.Frame):
         self.progress_dialog.Show()
 
     def on_translate(self, event):
-        if not self.po_entries: wx.MessageBox("No entries to translate.", "Info"); return
+        if not self.po_entries:
+            wx.MessageBox(self._empty_selection_reason(), "Nothing to translate", wx.OK | wx.ICON_INFORMATION)
+            return
 
         # Get selected translation method
         method_index = self.translation_method_radio.GetSelection()
@@ -811,6 +813,24 @@ class MainFrame(wx.Frame):
     def _is_entry_untranslated(self, entry):
         return is_entry_untranslated(entry)
 
+    def _empty_selection_reason(self) -> str:
+        """Say why no entry is selected, in the terms the user can act on."""
+        total = len(self.all_po_entries)
+        if not total:
+            return "No file is loaded yet. Use File > Open to pick one."
+        if self.translation_mode_radio.GetSelection() == 0:
+            return "\n".join((
+                f'All {total} entries already have a translation, so '
+                f'"Translate untranslated" has nothing left to do.',
+                '',
+                'Switch Mode to "Translate all" to send them to the model again, '
+                'or open a file that still has empty entries.',
+            ))
+        return (
+            f"All {total} entries are filtered out by your exclusion rules or "
+            "ignore list. Clear a rule to bring entries back."
+        )
+
     def on_filter_entries(self, event=None):
         # All three filters (untranslated, file-ignore, sectional exclusion)
         # are evaluated against each entry's ORIGINAL index in
@@ -831,9 +851,11 @@ class MainFrame(wx.Frame):
         # A StaticText cannot be focused and its changes are never announced,
         # so the count also rides on the button a screen reader lands on.
         self.translate_btn.SetLabel(
-            f"Translate {selected} entries" if selected else "Translate"
+            f"Translate {selected} entries" if selected else "Translate (nothing selected)"
         )
-        self.translate_btn.Enable(bool(self.po_entries))
+        # The button is never disabled on an empty selection: Windows skips a
+        # disabled control in the tab order, so a screen-reader user cannot
+        # reach it to find out why nothing happens. on_translate says why.
         self.panel.Layout()
 
     def show_review_interface(self):
