@@ -126,7 +126,7 @@ def test_openai_gpt_endpoint_never_sends_max_tokens(install_programmable):
     (rejected outright or cause truncated JSON). The translator must never
     send either parameter to OpenAI-compatible endpoints."""
     clients = install_programmable()
-    t = AITranslator("OpenAI GPT", "sk-x", "gpt-4o-mini", max_tokens=123, temperature=0.5)
+    t = AITranslator("OpenAI GPT", "sk-x", "gpt-4o-mini", temperature=0.5)
     t._initialize_client()
     text, usage = t._execute_prompt_with_usage("sys", "user")
     call = clients[0].calls[0]
@@ -140,7 +140,7 @@ def test_openai_gpt_endpoint_never_sends_max_tokens(install_programmable):
 
 def test_openai_gpt_reasoning_models_omit_max_tokens_and_temperature(install_programmable):
     clients = install_programmable()
-    t = AITranslator("OpenAI GPT", "sk-x", "gpt-5", max_tokens=500)
+    t = AITranslator("OpenAI GPT", "sk-x", "gpt-5")
     t._initialize_client()
     t._execute_prompt_with_usage("sys", "user")
     call = clients[0].calls[0]
@@ -477,7 +477,7 @@ def test_local_models_llamacpp_omits_max_tokens(monkeypatch):
     """The Llama.cpp backend routes through LocalModelManager. Even there
     we must not pass max_tokens — the server's default is correct."""
     t = AITranslator("Local Models", None, "local-x", local_backend="Llama.cpp",
-                     max_tokens=999, temperature=0.3)
+                     temperature=0.3)
     t._client_initialized = True  # bypass server-start side effects
 
     captured = {}
@@ -500,7 +500,7 @@ def test_local_models_llamacpp_omits_max_tokens(monkeypatch):
 
 def test_single_prompt_path_also_omits_max_tokens(install_programmable):
     clients = install_programmable()
-    t = AITranslator("OpenAI GPT", "sk-x", "gpt-4o-mini", max_tokens=64)
+    t = AITranslator("OpenAI GPT", "sk-x", "gpt-4o-mini")
     out, _ = t._execute_single_prompt("hi")
     assert out == "ok"
     assert "max_tokens" not in clients[0].calls[0]

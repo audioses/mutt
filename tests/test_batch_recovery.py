@@ -82,8 +82,35 @@ def test_splitting_gives_up_instead_of_descending_forever(monkeypatch):
     assert len(calls) <= 2 ** (t._MAX_BATCH_SPLITS + 1)
 
 
-def test_oversized_batch_size_from_an_old_config_is_capped():
-    t = AITranslator("OpenAI GPT", "key", "gpt-4", batch_size=1162)
-    assert t.batch_size == AITranslator.MAX_BATCH_SIZE
+def test_batch_size_is_honoured_as_configured():
+    # No ceiling any more: an oversized batch is halved on failure instead.
+    t = AITranslator("OpenAI GPT", "key", "gpt-4", batch_size=5000)
+    assert t.batch_size == 5000
     assert AITranslator("OpenAI GPT", "key", "gpt-4", batch_size=0).batch_size == 1
     assert AITranslator("OpenAI GPT", "key", "gpt-4", batch_size=50).batch_size == 50
+
+
+def test_truncated_reply_is_halved_not_fatal(monkeypatch):
+    """With no batch ceiling, the likeliest failure is a reply cut off at the
+    model's output limit. It used to match no split marker and kill the run."""
+    t = _translator(monkeypatch)
+    calls = []
+
+    def fake_once(texts, *a, **k):
+        calls.append(len(texts))
+        if len(texts) > 2:
+            # Exactly what _check_finish_reason raises, wrapped the way
+            # _process_batch_once re-raises it.
+            raise ValueError(
+                "Batch processing failed due to a critical error: Model truncated "
+                "its response because it hit an output-token limit. Your batch is "
+                "too large for this model's default output budget."
+            )
+        return [f"T:{m}" for m in texts], {"prompt_tokens": 1, "completion_tokens": 1}
+
+    monkeypatch.setattr(t, "_process_batch_once", fake_once)
+    out, _ = t._process_batch(list("abcdefgh"), "en", "tr", "")
+
+    assert out == [f"T:{c}" for c in "abcdefgh"]
+    assert calls[0] == 8  # tried whole first, then halved down to size
+

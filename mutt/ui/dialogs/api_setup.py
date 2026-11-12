@@ -80,10 +80,11 @@ class APISetupDialog(wx.Dialog):
         self.local_backend_radio = wx.RadioBox(self.basic_tab, label="", choices=["Llama.cpp", "LM Studio"], majorDimension=2, style=wx.RA_SPECIFY_COLS)
         sizer.Add(self.local_backend_radio, 0, wx.ALL | wx.EXPAND, 5)
 
-        sizer.Add(wx.StaticText(self.basic_tab, label=f"Batch Size (1-{AITranslator.MAX_BATCH_SIZE}):"), 0, wx.ALL, 5)
+        sizer.Add(wx.StaticText(self.basic_tab, label="Batch Size (strings per request):"), 0, wx.ALL, 5)
         self.batch_size_spin = wx.SpinCtrl(
-            self.basic_tab, min=1, max=AITranslator.MAX_BATCH_SIZE,
-            initial=min(int(self.config.get("batch_size", 50)), AITranslator.MAX_BATCH_SIZE),
+            # wx needs some max; this one only stops typos, not choices.
+            self.basic_tab, min=1, max=1_000_000,
+            initial=int(self.config.get("batch_size", 200)),
         )
         sizer.Add(self.batch_size_spin, 0, wx.ALL | wx.EXPAND, 5)
      
@@ -124,10 +125,6 @@ class APISetupDialog(wx.Dialog):
         sizer.Add(wx.StaticText(self.advanced_tab, label="Temperature (Creativity):"), 0, wx.ALL, 5)
         self.temperature_text = wx.TextCtrl(self.advanced_tab, value=str(self.config.get("temperature", 0.1)))
         sizer.Add(self.temperature_text, 0, wx.ALL | wx.EXPAND, 5)
-
-        sizer.Add(wx.StaticText(self.advanced_tab, label="Max Tokens per Response:"), 0, wx.ALL, 5)
-        self.max_tokens_spin = wx.SpinCtrl(self.advanced_tab, min=1, max=999999, initial=self.config.get("max_tokens", 4000))
-        sizer.Add(self.max_tokens_spin, 0, wx.ALL | wx.EXPAND, 5)
 
         sizer.Add(wx.StaticText(self.advanced_tab, label="Max Tokens per Batch:"), 0, wx.ALL, 5)
         self.max_batch_tokens_spin = wx.SpinCtrl(self.advanced_tab, min=1, max=400000, initial=self.config.get("max_batch_tokens", 16000))
@@ -329,7 +326,6 @@ class APISetupDialog(wx.Dialog):
 
         try:
             self.config["temperature"] = float(self.temperature_text.GetValue())
-            self.config["max_tokens"] = self.max_tokens_spin.GetValue()
             self.config["max_batch_tokens"] = self.max_batch_tokens_spin.GetValue()
             self.config["enable_surrounding_context"] = self.enable_context_checkbox.GetValue()
             self.config["context_previous_size"] = self.context_previous_spin.GetValue()

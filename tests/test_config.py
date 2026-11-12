@@ -49,6 +49,6 @@ def test_template_contains_no_real_api_keys(template):
 
 def test_template_top_level_required_keys(template):
     required = {"providers", "prompts", "last_provider", "batch_size",
-                "temperature", "max_tokens", "max_batch_tokens"}
+                "temperature", "max_batch_tokens"}
     missing = required - template.keys()
     assert not missing, f"Template missing top-level keys: {missing}"

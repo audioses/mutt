@@ -957,7 +957,7 @@ class MainFrame(wx.Frame):
                 from ai_translator import AITranslator
                 active_provider = self.config.get("last_provider")
                 settings = self.config.get("providers", {}).get(active_provider, {})
-                translator = AITranslator(active_provider, settings.get("api_key"), settings.get("api_model"), temperature=self.config.get("temperature", 0.7), max_tokens=self.config.get("max_tokens", 4000), extra_settings=settings)
+                translator = AITranslator(active_provider, settings.get("api_key"), settings.get("api_model"), temperature=self.config.get("temperature", 0.7), extra_settings=settings)
                 
                 mode_instance = instantiate_mode(python_mode_class, self, translator)
                 

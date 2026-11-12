@@ -37,7 +37,6 @@ def sample_config() -> dict:
         "batch_size": 5,
         "local_backend": "Llama.cpp",
         "temperature": 0.1,
-        "max_tokens": 1000,
         "max_batch_tokens": 4000,
         "enable_surrounding_context": False,
         "prompts": [],

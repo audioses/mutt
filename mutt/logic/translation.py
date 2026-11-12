@@ -25,9 +25,8 @@ def run_translation_thread(parent_frame, active_provider, settings, context):
             settings.get("api_key"),
             settings.get("api_model"),
             glossary=glossary,
-            batch_size=parent_frame.config.get("batch_size", 50),
+            batch_size=parent_frame.config.get("batch_size", 200),
             temperature=parent_frame.config.get("temperature", 0.1),
-            max_tokens=parent_frame.config.get("max_tokens", 4000),
             max_batch_tokens=parent_frame.config.get("max_batch_tokens", 16000),
             extra_settings=settings
         )

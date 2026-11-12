@@ -93,18 +93,15 @@ def _is_reasoning_model(model_name: str) -> bool:
 
 
 class AITranslator:
-    # Past a couple of hundred strings a model stops returning the JSON array
-    # intact — a stray character or a miscount loses the whole response. Held
-    # here rather than in the dialog so older configs are capped too.
-    MAX_BATCH_SIZE = 200
-
-    def __init__(self, api_provider, api_key, model_name, batch_size=50, glossary=None, local_backend="Llama.cpp", max_tokens=4000, temperature=0.1, max_batch_tokens=16000, extra_settings=None):
+    def __init__(self, api_provider, api_key, model_name, batch_size=200, glossary=None, local_backend="Llama.cpp", temperature=0.1, max_batch_tokens=16000, extra_settings=None):
         self.api_provider = api_provider
         self.api_key = api_key
         self.glossary = glossary if glossary is not None else {}
         self.model_name = model_name
-        self.batch_size = max(1, min(int(batch_size), self.MAX_BATCH_SIZE))
-        self.max_tokens = max_tokens
+        # No ceiling: the configured size is honoured as written. A batch
+        # too big for one reply comes back garbled or truncated, and
+        # _process_batch halves it and retries rather than losing the job.
+        self.batch_size = max(1, int(batch_size))
         self.temperature = temperature
         self._client = None  # Use a private variable for the client
         self._client_initialized = False # Flag to track if client has been initialized
@@ -631,6 +628,9 @@ class AITranslator:
     _SPLITTABLE_ERROR_MARKERS = (
         "failed to extract json", "malformed list", "empty response",
         "context length", "context_length_exceeded", "maximum context",
+        # A reply cut off at the model's output limit is the plainest
+        # "batch too big" signal there is; it used to kill the whole run.
+        "output-token limit",
     )
 
     # Four halvings turn a 1000-entry batch into ~60 and cost at most ~30

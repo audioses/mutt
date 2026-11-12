@@ -27,7 +27,7 @@ def run_tool_thread(parent_frame):
         # Initialize translator
         active_provider = parent_frame.config.get("last_provider")
         settings = parent_frame.config.get("providers", {}).get(active_provider, {})
-        translator = AITranslator(active_provider, settings.get("api_key"), settings.get("api_model"), temperature=parent_frame.config.get("temperature", 0.7), max_tokens=parent_frame.config.get("max_tokens", 4000), extra_settings=settings)
+        translator = AITranslator(active_provider, settings.get("api_key"), settings.get("api_model"), temperature=parent_frame.config.get("temperature", 0.7), extra_settings=settings)
         
         if yaml_mode_data:
             # Handle YAML-based mode
