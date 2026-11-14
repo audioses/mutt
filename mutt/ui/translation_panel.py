@@ -7,7 +7,7 @@ def create_translation_panel(frame):
     main_sizer = wx.BoxSizer(wx.VERTICAL)
     frame.entry_info_text = wx.StaticText(frame.panel, label=f"Loaded {len(frame.all_po_entries)} entries")
     main_sizer.Add(frame.entry_info_text, 0, wx.ALL|wx.EXPAND, 10)
-    frame.translation_mode_radio = wx.RadioBox(frame.panel, label="Mode", choices=["Translate untranslated", "Translate all"], style=wx.RA_SPECIFY_ROWS)
+    frame.translation_mode_radio = wx.RadioBox(frame.panel, label="Mode", choices=["Translate untranslated", "Translate all", "Update fuzzy (outdated)"], style=wx.RA_SPECIFY_ROWS)
     main_sizer.Add(frame.translation_mode_radio, 0, wx.ALL|wx.EXPAND, 10)
 
     # Translation method selection

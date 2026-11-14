@@ -198,12 +198,15 @@ class POHandler(FormatHandler):
                     int(k): v for k, v in plurals.items() if str(k).isdigit()
                 }
 
-            # Restore flags
+            # Restore flags. ``unit.fuzzy`` is the truth: the loaded flags still
+            # say "fuzzy" after the user (or an update run) clears it, and
+            # copying them back used to put the mark straight back on.
+            entry.flags = [f for f in (unit.attributes.get('polib_flags') or []) if f != 'fuzzy']
             if unit.fuzzy:
-                if 'fuzzy' not in entry.flags:
-                    entry.flags.append('fuzzy')
-            elif 'polib_flags' in unit.attributes:
-                 entry.flags = unit.attributes['polib_flags']
+                entry.flags.append('fuzzy')
+                # The old source (#| msgid) only means something while the
+                # entry is still waiting for its update.
+                entry.previous_msgid = unit.attributes.get('polib_previous_msgid')
 
 
             po_file.append(entry)

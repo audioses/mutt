@@ -47,8 +47,9 @@ def select_entries_for_translation(
 
     Args:
         all_entries: the complete, in-order list of entries for the document.
-        mode: ``0`` selects only untranslated entries; any other value selects
-            all entries.
+        mode: ``0`` selects only untranslated entries, ``2`` only fuzzy ones
+            (a translation whose source has since changed); any other value
+            selects all entries.
         ignore_rules: optional iterable of source strings (msgids) to skip,
             from a file-based ignore list.
         exclusion_manager: optional object exposing
@@ -60,6 +61,8 @@ def select_entries_for_translation(
     selected = []
     for original_idx, entry in enumerate(all_entries):
         if mode == 0 and not is_entry_untranslated(entry):
+            continue
+        if mode == 2 and not entry.get("fuzzy"):
             continue
         if ignore and (entry.get("msgid", "") or "").strip() in ignore:
             continue

@@ -237,6 +237,7 @@ class MainFrame(wx.Frame):
             (wx.ACCEL_ALT, ord('J'), ID_JUMP),
             (wx.ACCEL_ALT, ord('C'), ID_FOCUS_NOTES),
             (wx.ACCEL_ALT, ord('U'), ID_FOCUS_PLURAL),
+            (wx.ACCEL_ALT, ord('R'), ID_FOCUS_FUZZY),
         ])
         self.SetAcceleratorTable(accel_tbl)
         self.Bind(wx.EVT_MENU, self.on_next_entry, id=ID_NEXT_ENTRY)
@@ -245,6 +246,7 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_focus_target, id=ID_FOCUS_TARGET)
         self.Bind(wx.EVT_MENU, self.on_focus_notes, id=ID_FOCUS_NOTES)
         self.Bind(wx.EVT_MENU, self.on_focus_plural, id=ID_FOCUS_PLURAL)
+        self.Bind(wx.EVT_MENU, self.on_focus_fuzzy, id=ID_FOCUS_FUZZY)
         self.Bind(wx.EVT_MENU, self.on_show_search_dialog, id=ID_SEARCH)
         self.Bind(wx.EVT_MENU, self.on_show_jump_dialog, id=ID_JUMP)
 
@@ -257,6 +259,14 @@ class MainFrame(wx.Frame):
     def on_focus_plural(self, event):
         ctrl = getattr(self, 'plural_choice', None)
         if ctrl and ctrl.IsShown(): ctrl.SetFocus()
+    def on_focus_fuzzy(self, event):
+        if getattr(self, 'fuzzy_checkbox', None): self.fuzzy_checkbox.SetFocus()
+
+    def on_fuzzy_toggle(self, event):
+        """Mark or clear "needs review" (gettext's fuzzy flag) on the entry shown."""
+        if 0 <= self.current_entry_index < len(self.translated_po_entries):
+            self.translated_po_entries[self.current_entry_index]["fuzzy"] = self.fuzzy_checkbox.GetValue()
+            self.request_autosave()
 
     def on_plural_form_change(self, event):
         """Switch which msgstr[n] the target box edits, keeping the edit made
@@ -826,6 +836,11 @@ class MainFrame(wx.Frame):
                 'Switch Mode to "Translate all" to send them to the model again, '
                 'or open a file that still has empty entries.',
             ))
+        if self.translation_mode_radio.GetSelection() == 2:
+            return (
+                f"None of the {total} entries is marked fuzzy, so there is no "
+                "outdated translation to update."
+            )
         return (
             f"All {total} entries are filtered out by your exclusion rules or "
             "ignore list. Clear a rule to bring entries back."
@@ -1084,6 +1099,8 @@ class MainFrame(wx.Frame):
 
             self._update_plural_selector(entry)
             self._update_notes(entry)
+            if getattr(self, 'fuzzy_checkbox', None):
+                self.fuzzy_checkbox.SetValue(bool(entry.get("fuzzy")))
 
             # Safely access UI controls with existence checks
             if hasattr(self, 'src_text_ctrl') and self.src_text_ctrl:

@@ -267,6 +267,7 @@ class AITranslator:
                 if k >= len(translated_texts):
                     break
                 target = result_entries[entry_positions[id(entry)]]
+                target['fuzzy'] = False  # updated against the current source
                 if form is None:
                     target['msgstr'] = translated_texts[k]
                 elif form == 0:
@@ -400,6 +401,9 @@ class AITranslator:
             if k >= len(final_translated_texts):
                 break
             target = result_entries[job['index']]
+            # Only an entry the model actually answered loses its fuzzy mark;
+            # a cancelled run's untouched entries stay flagged as outdated.
+            target['fuzzy'] = False
             text = final_translated_texts[k]
             if job['form'] is None:
                 target['msgstr'] = text
@@ -447,6 +451,18 @@ class AITranslator:
                 if not isinstance(entry, dict):
                     continue
                 guidance = guidance_notes(entry)
+                outdated = (entry.get('msgstr') or '').strip() if entry.get('fuzzy') else ''
+                if outdated:
+                    # A fuzzy entry's old translation is the best starting point:
+                    # update it to the new source, don't translate from scratch.
+                    old_source = entry.get('polib_previous_msgid')
+                    hint = f"outdated translation \"{outdated}\""
+                    if old_source:
+                        hint += f" was made for the old source \"{old_source}\""
+                    hint += ("; the source has changed since. Update it to match the "
+                             "current source, keeping its wording and terminology "
+                             "where they still fit")
+                    guidance = f"{guidance} | {hint}" if guidance else hint
                 if guidance:
                     note_lines.append(f"- Item {position}: {guidance}")
             if note_lines:

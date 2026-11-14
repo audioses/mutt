@@ -60,6 +60,10 @@ def create_review_panel(frame):
         main_sizer.Add(wx.StaticText(frame.panel, label="Translated Text (Alt+Right):"), 0, wx.ALL, 5)
         frame.tgt_text_ctrl = wx.TextCtrl(frame.panel, style=wx.TE_MULTILINE)
         main_sizer.Add(frame.tgt_text_ctrl, 1, wx.EXPAND|wx.ALL, 5)
+        # gettext's fuzzy flag, as a focusable checkbox so its state is read
+        # out. Saved PO files keep the flag; many build tools skip such entries.
+        frame.fuzzy_checkbox = wx.CheckBox(frame.panel, label="Needs review (fuzzy) (Alt+R)")
+        main_sizer.Add(frame.fuzzy_checkbox, 0, wx.ALL, 5)
         frame.logger.debug("Text controls created successfully")
 
         # Comments from the PO file (translator notes, extracted comments,
@@ -184,6 +188,7 @@ def create_review_panel(frame):
         save_as_btn.Bind(wx.EVT_BUTTON, frame.on_save_as)
         save_project_btn.Bind(wx.EVT_BUTTON, frame.on_save_project)
         frame.tool_button.Bind(wx.EVT_BUTTON, frame.on_tool_execute)
+        frame.fuzzy_checkbox.Bind(wx.EVT_CHECKBOX, frame.on_fuzzy_toggle)
         frame.tool_input.Bind(wx.EVT_TEXT_ENTER, frame.on_tool_execute)
         frame.variation_custom_prompt.Bind(wx.EVT_TEXT_ENTER, frame.on_tool_execute)
         frame.chat_mode_radio.Bind(wx.EVT_CHOICE, frame.on_chat_mode_change)

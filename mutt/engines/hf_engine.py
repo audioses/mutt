@@ -318,6 +318,8 @@ class HuggingFaceEngine:
         for idx, entry in enumerate(result_entries):
             if not entry.get("obsolete"):
                 result_entries[idx]["msgstr"] = translated_texts[i] if i < len(translated_texts) else ""
+                if i < len(translated_texts):
+                    result_entries[idx]["fuzzy"] = False  # updated against the current source
                 i += 1
                 if progress_callback:
                     progress_callback(i, total)
